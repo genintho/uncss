@@ -45,7 +45,7 @@ function getHTML(files, options) {
         }
         // raw html
         return phantom.fromRaw(filename, options);
-    }).then(function (pages) {
+    }, { concurrency: 50 }).then(function (pages) {
         return [files, options, pages];
     });
 }
@@ -65,7 +65,7 @@ function getStylesheets(files, options, pages) {
     /* Extract the stylesheets from the HTML */
     return promise.map(pages, function (page) {
         return phantom.getStylesheets(page, options);
-    }).then(function (stylesheets) {
+    }, { concurrency: 50 }).then(function (stylesheets) {
         return [files, options, pages, stylesheets];
     });
 }

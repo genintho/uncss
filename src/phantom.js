@@ -148,7 +148,10 @@ function fromRemote(url, options) {
     }
 
     return promise.resolve(phantom.openPage(url).then(function (page) {
-        return resolveWithPage(page, options)();
+        page.url = url;
+        return page.dispose().then(function() {
+            return resolveWithPage(page, options)();
+        });
     }));
 }
 
@@ -163,26 +166,32 @@ function getStylesheets(page, options) {
         options.media = [options.media];
     }
     var media = _.union(['', 'all', 'screen'], options.media);
-    return page.run(function () {
-        return this.evaluate(function () {
-            return Array.prototype.map.call(document.querySelectorAll('link[rel="stylesheet"]'), function (link) {
-                return {
-                    href: link.href,
-                    media: link.media
-                };
+    return phantom.openPage(page.url).then(function(page) {
+        return page.run(function () {
+            return this.evaluate(function () {
+                return Array.prototype.map.call(document.querySelectorAll('link[rel="stylesheet"]'), function (link) {
+                    return {
+                        href: link.href,
+                        media: link.media
+                    };
+                });
+            });
+        }).then(function (stylesheets) {
+            stylesheets = _
+                .toArray(stylesheets)
+                /* Match only specified media attributes, plus defaults */
+                .filter(function (sheet) {
+                    return media.indexOf(sheet.media) !== -1;
+                })
+                .map(function (sheet) {
+                    return sheet.href;
+                });
+            return stylesheets;
+        }).then(function(result) {
+            return page.dispose().then(function() {
+                return result;
             });
         });
-    }).then(function (stylesheets) {
-        stylesheets = _
-            .toArray(stylesheets)
-            /* Match only specified media attributes, plus defaults */
-            .filter(function (sheet) {
-                return media.indexOf(sheet.media) !== -1;
-            })
-            .map(function (sheet) {
-                return sheet.href;
-            });
-        return stylesheets;
     });
 }
 
@@ -193,37 +202,43 @@ function getStylesheets(page, options) {
  * @return {promise}
  */
 function findAll(page, sels) {
-    return page.run(sels, function (args) {
-        return this.evaluate(function (selectors) {
-            // Unwrap noscript elements
-            Array.prototype.forEach.call(document.getElementsByTagName('noscript'), function (ns) {
-                var wrapper = document.createElement('div');
-                wrapper.innerHTML = ns.innerText;
-                // Insert each child of the <noscript> as its sibling
-                Array.prototype.forEach.call(wrapper.children, function (child) {
-                    ns.parentNode.insertBefore(child, ns);
+    return phantom.openPage(page.url).then(function(page) {
+        return page.run(sels, function (args) {
+            return this.evaluate(function (selectors) {
+                // Unwrap noscript elements
+                Array.prototype.forEach.call(document.getElementsByTagName('noscript'), function (ns) {
+                    var wrapper = document.createElement('div');
+                    wrapper.innerHTML = ns.innerText;
+                    // Insert each child of the <noscript> as its sibling
+                    Array.prototype.forEach.call(wrapper.children, function (child) {
+                        ns.parentNode.insertBefore(child, ns);
+                    });
                 });
-            });
-            // Do the filtering
-            selectors = selectors.filter(function (selector) {
-                try {
-                    if (document.querySelector(selector)) {
+                // Do the filtering
+                selectors = selectors.filter(function (selector) {
+                    try {
+                        if (document.querySelector(selector)) {
+                            return true;
+                        }
+                    } catch (e) {
                         return true;
                     }
-                } catch (e) {
-                    return true;
-                }
-                return false;
+                    return false;
+                });
+                return {
+                    selectors: selectors
+                };
+            }, args);
+        }).then(function (res) {
+            if (res === null) {
+                return [];
+            }
+            return res.selectors;
+        }).then(function(result) {
+            return page.dispose().then(function() {
+                return result;
             });
-            return {
-                selectors: selectors
-            };
-        }, args);
-    }).then(function (res) {
-        if (res === null) {
-            return [];
-        }
-        return res.selectors;
+        });
     });
 }
 

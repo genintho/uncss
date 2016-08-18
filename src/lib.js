@@ -229,7 +229,7 @@ function filterUnusedRules(pages, css, ignore, usedSelectors) {
 module.exports = function uncss(pages, css, ignore) {
     return promise.map(pages, function (page) {
         return getUsedSelectors(page, css);
-    }).then(function (usedSelectors) {
+    }, { concurrency: 50 }).then(function (usedSelectors) {
         usedSelectors = _.flatten(usedSelectors);
         var filteredCss = filterUnusedRules(pages, css, ignore, usedSelectors);
         var allSelectors = getAllSelectors(css);
