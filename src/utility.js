@@ -111,6 +111,7 @@ function readStylesheets(files) {
         if (isURL(filename)) {
             return request({
                 url: filename,
+                gzip: true,
                 headers: { 'User-Agent': 'UnCSS' }
             }).spread(function (response, body) {
                 return body;
